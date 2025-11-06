@@ -1,5 +1,5 @@
 // =======================
-//  AVADO Backend Server
+//  URBILUX Backend Server
 // =======================
 require("dotenv").config();
 const express = require("express");
@@ -9,23 +9,25 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 const pool = require("./db");
 const { adminOnly } = require("./middleware/authMiddleware");
-const axios = require("axios"); // 🟣 নতুন যোগ
+const axios = require("axios");
 
 const app = express();
 
-// ✅ Trust proxy (Render-এর জন্য আবশ্যক)
+// ✅ Render proxy trust (important)
 app.set("trust proxy", 1);
 
 // ---------------- MIDDLEWARE ----------------
-// ✅ CORS config (Render + Cloudflare Pages)
+// ✅ CORS config (Render + Localhost)
+// ✅ Correct CORS for Render + Cloudflare
 app.use(
   cors({
     origin: [
-      "https://avado.pages.dev", // তোমার frontend domain
-      "http://localhost:5173",   // local test
+      "https://urbilux.pages.dev",  // তোমার frontend domain
+      "https://urbilux.pages.dev/", // trailing slash version (safety)
+      "http://localhost:5173",      // local dev
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -77,12 +79,17 @@ app.get("/api/admin/test", adminOnly, async (req, res) => {
 
 // ---------------- ROOT ROUTE ----------------
 app.get("/", (req, res) => {
-  res.send("✅ AVADO backend is alive!");
+  res.send("✅ URBILUX backend is alive and running!");
 });
 
 // ---------------- HEALTH CHECK ----------------
-app.get("/health", (req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
+app.get("/health", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({ ok: true, db_time: result.rows[0].now });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: "❌ Database not connected" });
+  }
 });
 
 // ---------------- 404 HANDLER ----------------
@@ -99,4 +106,3 @@ app.listen(PORT, async () => {
     console.error("❌ PostgreSQL connection failed:", err);
   }
 });
-

@@ -1,27 +1,21 @@
-// dbc.js
-const { Sequelize } = require("sequelize");
+// db.js
+const { Pool } = require("pg");
 require("dotenv").config();
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    dialect: "postgres",
-    logging: false,
-    dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false // 🟢 এটা অবশ্যই লাগবে
-      }
-    }
-  }
-);
+// ✅ Neon + Render compatible pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // required by Neon on Render
+  },
+});
 
-sequelize
-  .authenticate()
-  .then(() => console.log("✅ Sequelize connected to PostgreSQL!"))
-  .catch((err) => console.error("❌ Sequelize connection failed:", err));
+pool.on("connect", () => {
+  console.log("✅ PostgreSQL connected successfully!");
+});
 
-module.exports = sequelize;
+pool.on("error", (err) => {
+  console.error("❌ PostgreSQL connection error:", err);
+});
+
+module.exports = pool;
