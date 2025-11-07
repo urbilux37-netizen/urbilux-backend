@@ -1,5 +1,6 @@
-import express from "express";
-import pool from "../db.js";
+// routes/banners.js
+const express = require("express");
+const pool = require("../db");
 const router = express.Router();
 
 // ✅ Get all banners
@@ -55,4 +56,4 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
