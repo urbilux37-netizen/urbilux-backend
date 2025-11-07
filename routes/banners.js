@@ -1,112 +1,58 @@
-// routes/banners.js
-const express = require("express");
+import express from "express";
+import pool from "../db.js";
 const router = express.Router();
-const pool = require("../db");
-const multer = require("multer");
-const { v2: cloudinary } = require("cloudinary");
-const streamifier = require("streamifier");
 
-// ---------------------
-// ☁️ CLOUDINARY CONFIG
-// ---------------------
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// ---------------------
-// 📸 MULTER MEMORY STORAGE
-// ---------------------
-const storage = multer.memoryStorage();
-const uploadBanner = multer({ storage });
-
-// ---------------------
-// 🔼 Helper: Upload to Cloudinary
-// 🧩 Cloudinary Upload Helper (Final Tested)
-const uploadToCloudinary = async (fileBuffer, folder) => {
-  return new Promise((resolve, reject) => {
-    try {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: "auto" }, // 🔹 auto detects image/video/etc.
-        (error, result) => {
-          if (error) {
-            console.error("❌ Cloudinary upload failed:", error.message);
-            reject(error);
-          } else {
-            console.log("✅ Cloudinary upload success:", result.secure_url);
-            resolve(result.secure_url);
-          }
-        }
-      );
-
-      // 🔹 Proper stream pass
-      streamifier.createReadStream(fileBuffer).pipe(uploadStream);
-    } catch (err) {
-      console.error("❌ Streamifier failed:", err.message);
-      reject(err);
-    }
-  });
-};
-
-
-// ============================================================
-// ✅ GET ALL BANNERS
-// ============================================================
+// ✅ Get all banners
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM banners ORDER BY id ASC");
+    const result = await pool.query("SELECT * FROM banners ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
-    console.error("❌ GET /banners error:", err);
+    console.error("❌ Banner fetch error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// ============================================================
-// ✅ ADD NEW BANNER (Now via Cloudinary)
-// ============================================================
-router.post("/", uploadBanner.single("image"), async (req, res) => {
+// ✅ Add new banner
+router.post("/", async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "Image required" });
-
-    // ☁️ Upload image to Cloudinary folder "avado/banners"
-    const image_url = await uploadToCloudinary(req.file.buffer, "avado/banners");
-
-    const { link } = req.body;
-
+    const { title, image_url, button_text, button_link } = req.body;
     const result = await pool.query(
-      "INSERT INTO banners (image_url, link) VALUES ($1, $2) RETURNING *",
-      [image_url, link]
+      "INSERT INTO banners (title, image_url, button_text, button_link) VALUES ($1,$2,$3,$4) RETURNING *",
+      [title, image_url, button_text, button_link]
     );
-
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("❌ POST /banners error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("❌ Banner add error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ============================================================
-// ✅ DELETE BANNER BY ID
-// ============================================================
-router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
-
+// ✅ Update banner
+router.put("/:id", async (req, res) => {
   try {
-    const banner = await pool.query("SELECT * FROM banners WHERE id = $1", [id]);
-    if (banner.rows.length === 0)
-      return res.status(404).json({ message: "Banner not found" });
-
-    // Database থেকে banner delete
-    await pool.query("DELETE FROM banners WHERE id = $1", [id]);
-
-    // (Optional) Cloudinary image delete করছো না — future use এর জন্য save থাকছে
-    res.json({ message: "🗑️ Banner deleted successfully" });
+    const { title, image_url, button_text, button_link } = req.body;
+    const { id } = req.params;
+    const result = await pool.query(
+      "UPDATE banners SET title=$1,image_url=$2,button_text=$3,button_link=$4 WHERE id=$5 RETURNING *",
+      [title, image_url, button_text, button_link, id]
+    );
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("❌ DELETE /banners/:id error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("❌ Banner update error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-module.exports = router;
+// ✅ Delete banner
+router.delete("/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM banners WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Banner delete error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+export default router;

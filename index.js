@@ -62,7 +62,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/footer", footerRoutes);
-app.use("/banners", bannerRoutes);
+app.use("/api/banners", bannerRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
