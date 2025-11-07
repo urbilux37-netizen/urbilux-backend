@@ -1,4 +1,3 @@
-// routes/checkout.js
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -10,10 +9,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const isProd = process.env.NODE_ENV === "production";
 
 /* ===========================================================
-   ✅ PLACE ORDER (Auto user create if guest)
+   ✅ PLACE ORDER (Auto user create if guest + manual payment)
 =========================================================== */
 router.post("/", getUserOrGuest, async (req, res) => {
-  const { items, total, customer, payment_method } = req.body;
+  const { items, total, customer, payment_method, online_payment } = req.body;
 
   if (!items || !total || !customer) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -59,18 +58,18 @@ router.post("/", getUserOrGuest, async (req, res) => {
         );
         userId = newUser.rows[0].id;
 
-        // 🔹 Set JWT Cookie for auto login (Render + Cloudflare compatible)
+        // 🔹 Set JWT Cookie for auto login
         const newToken = jwt.sign({ id: userId }, JWT_SECRET, {
           expiresIn: "7d",
         });
 
         res.cookie("token", newToken, {
           httpOnly: true,
-          secure: true, // ✅ HTTPS only
-          sameSite: "None", // ✅ Allow cross-domain cookie
-          domain: "avado-backend.onrender.com", // ✅ Your backend domain
-          path: "/", // ✅ Cookie available for all routes
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+          secure: true,
+          sameSite: "None",
+          domain: "avado-backend.onrender.com",
+          path: "/",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
         console.log("✅ New user created & logged in:", phone);
@@ -86,12 +85,26 @@ router.post("/", getUserOrGuest, async (req, res) => {
       return { ...item, price };
     });
 
-    // 🔹 4️⃣ Insert order
+    // 🔹 4️⃣ Prepare optional payment info
+    let paymentInfo = null;
+    let status = "pending";
+
+    if (payment_method === "Online Payment" && online_payment) {
+      paymentInfo = {
+        method: online_payment.method,
+        amount: Number(online_payment.amount || 0),
+        last2: online_payment.last2,
+        note: online_payment.note || "Manual payment verification pending",
+      };
+      status = "pending_payment";
+    }
+
+    // 🔹 5️⃣ Insert order
     const insertQuery = `
       INSERT INTO orders (
-        user_id, session_id, items, total, customer, payment_method, status, order_date, created_at
+        user_id, session_id, items, total, customer, payment_method, online_payment, status, order_date, created_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
       RETURNING *;
     `;
 
@@ -102,10 +115,11 @@ router.post("/", getUserOrGuest, async (req, res) => {
       total,
       JSON.stringify(customer),
       payment_method || "Cash on Delivery",
-      "pending",
+      paymentInfo ? JSON.stringify(paymentInfo) : null,
+      status,
     ]);
 
-    // 🔹 5️⃣ Clear cart (both user/guest)
+    // 🔹 6️⃣ Clear cart (both user/guest)
     if (userId) {
       await client.query("DELETE FROM carts WHERE user_id=$1", [userId]);
     } else if (req.cartOwner?.id) {
@@ -121,9 +135,7 @@ router.post("/", getUserOrGuest, async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ Checkout Error:", err);
-    res
-      .status(500)
-      .json({ error: "Checkout failed", details: err.message });
+    res.status(500).json({ error: "Checkout failed", details: err.message });
   } finally {
     client.release();
   }
@@ -150,6 +162,10 @@ router.get("/", async (req, res) => {
         typeof row.customer === "string"
           ? JSON.parse(row.customer)
           : row.customer,
+      online_payment:
+        typeof row.online_payment === "string"
+          ? JSON.parse(row.online_payment)
+          : row.online_payment,
     }));
 
     res.json({ success: true, orders });
@@ -174,6 +190,10 @@ router.get("/admin/all", async (req, res) => {
         typeof row.customer === "string"
           ? JSON.parse(row.customer)
           : row.customer,
+      online_payment:
+        typeof row.online_payment === "string"
+          ? JSON.parse(row.online_payment)
+          : row.online_payment,
     }));
     res.json({ success: true, orders });
   } catch (err) {
