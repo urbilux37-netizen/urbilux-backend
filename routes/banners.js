@@ -1,9 +1,25 @@
-// routes/banners.js
 const express = require("express");
 const pool = require("../db");
 const router = express.Router();
+const multer = require("multer");
+const cloudinary = require("../utils/cloudinary");
+const upload = multer({ dest: "uploads/" });
 
-// ✅ Get all banners
+// ✅ Upload image to Cloudinary
+router.post("/upload", upload.single("image"), async (req, res) => {
+  try {
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: "urbilux/banners",
+      transformation: [{ quality: "auto" }],
+    });
+    res.json({ url: result.secure_url });
+  } catch (err) {
+    console.error("❌ Cloudinary upload error:", err);
+    res.status(500).json({ message: "Upload failed" });
+  }
+});
+
+// ✅ Normal banner CRUD routes
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM banners ORDER BY id DESC");
@@ -14,7 +30,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add new banner
 router.post("/", async (req, res) => {
   try {
     const { title, image_url, button_text, button_link } = req.body;
@@ -29,7 +44,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Update banner
 router.put("/:id", async (req, res) => {
   try {
     const { title, image_url, button_text, button_link } = req.body;
@@ -45,7 +59,6 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ Delete banner
 router.delete("/:id", async (req, res) => {
   try {
     await pool.query("DELETE FROM banners WHERE id=$1", [req.params.id]);
