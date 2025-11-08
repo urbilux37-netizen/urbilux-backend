@@ -67,7 +67,7 @@ router.post("/", getUserOrGuest, async (req, res) => {
           httpOnly: true,
           secure: true,
           sameSite: "None",
-          domain: "avado-backend.onrender.com",
+          domain: "urbilux-backend.onrender.com",
           path: "/",
           maxAge: 7 * 24 * 60 * 60 * 1000,
         });
