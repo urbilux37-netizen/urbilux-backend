@@ -13,25 +13,26 @@ const axios = require("axios");
 
 const app = express();
 
-// ✅ Render proxy trust (important)
+// ✅ Render proxy trust (important for secure cookies)
 app.set("trust proxy", 1);
 
 // ---------------- MIDDLEWARE ----------------
-// ✅ CORS config (Render + Localhost)
-// ✅ Correct CORS for Render + Cloudflare
+// ✅ CORS config (Render + Localhost + Cloudflare Pages)
 app.use(
   cors({
     origin: [
-     "https://urbiluxbd.com",
-      "https://www.urbiluxbd.com",// trailing slash version (safety)
-      "http://localhost:5173",      // local dev
+      "https://urbiluxbd.com",
+      "https://www.urbiluxbd.com",
+      "https://urbilux.pages.dev", // 🟣 added Cloudflare Pages domain
+      "http://localhost:5173", // local dev
     ],
-    credentials: true,
+    credentials: true, // ✅ allow cookies cross-domain
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
+// ✅ Must come before routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
