@@ -1,12 +1,11 @@
-import express from "express";
-import db from "../config/db.js";
-
+const express = require("express");
+const pool = require("../db");
 const router = express.Router();
 
-// Today Visitors (unique IP)
+// Today
 router.get("/visits-today", async (req, res) => {
   try {
-    const result = await db.query(`
+    const result = await pool.query(`
       SELECT COUNT(*) AS total
       FROM visit_logs
       WHERE visited_at::date = CURRENT_DATE
@@ -18,10 +17,10 @@ router.get("/visits-today", async (req, res) => {
   }
 });
 
-// Last 7 Days Visitors
+// Last 7 days
 router.get("/visits-7days", async (req, res) => {
   try {
-    const result = await db.query(`
+    const result = await pool.query(`
       SELECT COUNT(*) AS total
       FROM visit_logs
       WHERE visited_at >= NOW() - INTERVAL '7 days'
@@ -33,10 +32,10 @@ router.get("/visits-7days", async (req, res) => {
   }
 });
 
-// Last 30 Days Visitors
+// Last 30 days
 router.get("/visits-30days", async (req, res) => {
   try {
-    const result = await db.query(`
+    const result = await pool.query(`
       SELECT COUNT(*) AS total
       FROM visit_logs
       WHERE visited_at >= NOW() - INTERVAL '30 days'
@@ -48,4 +47,4 @@ router.get("/visits-30days", async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
