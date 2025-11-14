@@ -23,21 +23,55 @@ app.use(
     origin: [
       "https://urbiluxbd.com",
       "https://www.urbiluxbd.com",
-      "https://urbilux.pages.dev", // 🟣 added Cloudflare Pages domain
-      "http://localhost:5173", // local dev
+      "https://urbilux.pages.dev",
+      "http://localhost:5173",
     ],
-    credentials: true, // ✅ allow cookies cross-domain
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ✅ Must come before routes
+// Must come before all routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ✅ Request Logger
+// ---------------- UNIQUE IP VISIT TRACKING MIDDLEWARE ----------------
+app.use(async (req, res, next) => {
+  try {
+    // API route হলে count করবে না (শুধু frontend page visits)
+    if (!req.path.startsWith("/api")) {
+      const rawIp =
+        req.headers["x-forwarded-for"]?.split(",")[0] ||
+        req.socket.remoteAddress;
+
+      const ip = rawIp?.replace("::ffff:", "") || "unknown";
+
+      // আজ এই IP আগে count হয়েছে কিনা?
+      const check = await pool.query(
+        `SELECT id FROM visit_logs
+         WHERE ip_address = $1
+         AND visited_at::date = CURRENT_DATE
+         LIMIT 1`,
+        [ip]
+      );
+
+      if (check.rows.length === 0) {
+        await pool.query(
+          "INSERT INTO visit_logs (ip_address) VALUES ($1)",
+          [ip]
+        );
+      }
+    }
+  } catch (err) {
+    console.log("Visit Log Error:", err);
+  }
+
+  next();
+});
+
+// ---------------- REQUEST LOGGER ----------------
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
@@ -58,6 +92,9 @@ const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
 const statsRoutes = require("./routes/stats");
 
+// 🟣 Traffic Stats Route (ADD THIS)
+const trafficStats = require("./routes/trafficStats");
+
 // ---------------- ROUTES REGISTER ----------------
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
@@ -67,6 +104,9 @@ app.use("/api/banners", bannerRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
+
+// 🟣 Register new Traffic Stats Route (ADD THIS)
+app.use("/api/stats", trafficStats);
 
 // ---------------- ADMIN PROTECTED TEST ROUTE ----------------
 app.get("/api/admin/test", adminOnly, async (req, res) => {
