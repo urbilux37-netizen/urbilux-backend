@@ -106,7 +106,7 @@ app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
 
 // 🟣 Register new Traffic Stats Route (ADD THIS)
-app.use("/api/stats", trafficStats);
+app.use("/api/traffic", trafficStats);
 
 // ---------------- ADMIN PROTECTED TEST ROUTE ----------------
 app.get("/api/admin/test", adminOnly, async (req, res) => {
