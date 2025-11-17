@@ -37,12 +37,13 @@ function ensureOwner(req, res) {
 /* =======================================
    1) GET CART — (FIXED FOR VARIANTS)
 ======================================= */
+/* ================================
+   1) GET CART (User or Guest)
+================================ */
 router.get("/", getUserOrGuest, async (req, res) => {
   const owner = ensureOwner(req, res);
 
   try {
-    console.log("🧾 CART OWNER:", owner);
-
     let query, params;
 
     if (owner.type === "user") {
@@ -52,12 +53,10 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.product_id,
           c.quantity,
 
-          -- 🟣 FINAL VALUES FROM CART
           c.price AS final_price,
           c.image_url AS final_image,
           c.variants AS selected_variants,
 
-          -- Product data (name & discount only)
           p.name,
           p.discount_percent
 
@@ -67,6 +66,7 @@ router.get("/", getUserOrGuest, async (req, res) => {
         ORDER BY c.id DESC
       `;
       params = [owner.id];
+
     } else {
       query = `
         SELECT 
@@ -74,12 +74,10 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.product_id,
           c.quantity,
 
-          -- 🟣 FINAL VALUES FROM CART
           c.price AS final_price,
           c.image_url AS final_image,
           c.variants AS selected_variants,
 
-          -- Product data (name & discount only)
           p.name,
           p.discount_percent
 
@@ -93,21 +91,18 @@ router.get("/", getUserOrGuest, async (req, res) => {
 
     const result = await db.query(query, params);
 
-    // Parse variant JSON
-    const cartItems = result.rows.map((item) => ({
+    const items = result.rows.map((item) => ({
       ...item,
       selected_variants: item.selected_variants
         ? JSON.parse(item.selected_variants)
-        : {},
+        : {}
     }));
 
-    res.json({ cart: cartItems });
+    res.json({ cart: items });
+
   } catch (err) {
     console.error("❌ GET CART ERROR:", err);
-    res.status(500).json({
-      error: "Server error",
-      details: err.message,
-    });
+    res.status(500).json({ error: "Server error", details: err.message });
   }
 });
 
