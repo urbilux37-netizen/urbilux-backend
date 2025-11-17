@@ -2,11 +2,13 @@ const axios = require("axios");
 
 async function createPackzyOrder(order) {
   try {
+    // Base URL ঠিক ভাবে trim
     const BASE = (process.env.PACKZY_API_BASE || "")
       .trim()
-      .replace(/\/$/, "");
+      .replace(/\/$/, ""); // remove last slash
 
-    const url = `${BASE}/order/create`;
+    // Correct Packzy Order Create API endpoint
+    const url = `${BASE}/create_order`;
 
     console.log("PACKZY FINAL URL:", url);
 
@@ -20,18 +22,21 @@ ${order.customer.district ? ", " + order.customer.district : ""}
     const response = await axios.post(
       url,
       {
-        invoice_id: order.id,
+        invoice: order.id,
         recipient_name: order.customer.name,
         recipient_phone: order.customer.phone,
-        delivery_address: fullAddress,
-        cod_amount: order.total,
-        number_of_items: order.items.length,
-        note: order.note || "",
+        recipient_address: fullAddress,
+        cod_amount: Number(order.total),
+        note: "",
+        item_description: "Order Items",
+        total_lot: order.items.length,
+        delivery_type: 0,
       },
       {
         headers: {
-          "API-KEY": process.env.PACKZY_API_KEY,
-          "SECRET-KEY": process.env.PACKZY_API_SECRET,
+          "Api-Key": process.env.PACKZY_API_KEY,
+          "Secret-Key": process.env.PACKZY_API_SECRET,
+          "Content-Type": "application/json",
         },
       }
     );
@@ -42,7 +47,7 @@ ${order.customer.district ? ", " + order.customer.district : ""}
       msg: error.message,
       response: error.response?.data,
       status: error.response?.status,
-      url: error.config?.url
+      url: error.config?.url || null,
     });
     throw error;
   }
