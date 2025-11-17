@@ -40,6 +40,9 @@ function ensureOwner(req, res) {
 /* ================================
    1) GET CART (User or Guest)
 ================================ */
+/* ================================
+   GET CART (FINAL PERFECT VERSION)
+================================ */
 router.get("/", getUserOrGuest, async (req, res) => {
   const owner = ensureOwner(req, res);
 
@@ -52,14 +55,11 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.id,
           c.product_id,
           c.quantity,
-
           c.price AS final_price,
           c.image_url AS final_image,
-          c.variants AS selected_variants,
-
+          COALESCE(c.variants, '{}'::jsonb) AS variants,
           p.name,
           p.discount_percent
-
         FROM carts c
         JOIN products p ON p.id = c.product_id
         WHERE c.user_id = $1
@@ -73,14 +73,11 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.id,
           c.product_id,
           c.quantity,
-
           c.price AS final_price,
           c.image_url AS final_image,
-          c.variants AS selected_variants,
-
+          COALESCE(c.variants, '{}'::jsonb) AS variants,
           p.name,
           p.discount_percent
-
         FROM carts c
         JOIN products p ON p.id = c.product_id
         WHERE c.session_id = $1
@@ -91,11 +88,10 @@ router.get("/", getUserOrGuest, async (req, res) => {
 
     const result = await db.query(query, params);
 
+    // PG jsonb → already JS Object (NO JSON.parse)
     const items = result.rows.map((item) => ({
       ...item,
-      selected_variants: item.selected_variants
-        ? JSON.parse(item.selected_variants)
-        : {}
+      variants: item.variants || {},
     }));
 
     res.json({ cart: items });
@@ -105,6 +101,7 @@ router.get("/", getUserOrGuest, async (req, res) => {
     res.status(500).json({ error: "Server error", details: err.message });
   }
 });
+
 
 /* =======================================
    2) ADD TO CART — WITH VARIANT SUPPORT
