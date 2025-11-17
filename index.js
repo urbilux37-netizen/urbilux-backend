@@ -91,6 +91,7 @@ const bannerRoutes = require("./routes/banners");
 const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
 const statsRoutes = require("./routes/stats");
+const orderRoutes = require("./routes/orders");
 
 // 🟣 Traffic Stats Route (ADD THIS)
 const trafficStats = require("./routes/trafficStats");
@@ -104,6 +105,7 @@ app.use("/api/banners", bannerRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/orders", orderRoutes);
 
 // 🟣 Register new Traffic Stats Route (ADD THIS)
 app.use("/api/traffic", trafficStats);

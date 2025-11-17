@@ -109,5 +109,56 @@ router.get("/debug/cookie", (req, res) => {
     message: "Cookie debug route active",
   });
 });
+/* ===========================================================
+   ✅ ADMIN - SEND ORDER TO PACKZY COURIER (1-Click)
+=========================================================== */
+const { createPackzyOrder } = require("../services/packzy");
+
+router.post("/admin/:id/send-packzy", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1) Order fetch
+    const result = await pool.query("SELECT * FROM orders WHERE id=$1", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    let order = result.rows[0];
+
+    // ensure correct parse
+    order.items =
+      typeof order.items === "string" ? JSON.parse(order.items) : order.items;
+
+    order.customer =
+      typeof order.customer === "string"
+        ? JSON.parse(order.customer)
+        : order.customer;
+
+    // 2) Send to Packzy API
+    const apiResponse = await createPackzyOrder(order);
+
+    // 3) Save tracking code in DB
+    await pool.query(
+      "UPDATE orders SET courier=$1, courier_tracking=$2, courier_status=$3 WHERE id=$4",
+      ["Packzy", apiResponse.tracking_code, "submitted", id]
+    );
+
+    res.json({
+      success: true,
+      message: "Order sent to Packzy successfully!",
+      tracking: apiResponse.tracking_code,
+      api: apiResponse,
+    });
+  } catch (error) {
+    console.error("❌ SEND PACKZY ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send order to Packzy",
+      error: error.response?.data || error.message,
+    });
+  }
+});
 
 module.exports = router;
