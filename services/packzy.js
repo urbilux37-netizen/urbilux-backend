@@ -2,12 +2,11 @@ const axios = require("axios");
 
 async function createPackzyOrder(order) {
   try {
-    // Fix base URL
     const BASE = (process.env.PACKZY_API_BASE || "")
       .trim()
-      .replace(/\/$/, "");  // remove last slash
+      .replace(/\/$/, "");
 
-    const url = `${BASE}/create-order`;
+    const url = `${BASE}/order/create`;
 
     console.log("PACKZY FINAL URL:", url);
 
