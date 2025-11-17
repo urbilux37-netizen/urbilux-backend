@@ -1,40 +1,42 @@
-// routes/cart.js
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { getUserOrGuest } = require("../middleware/authMiddleware");
 
-// ✅ Debug: confirm file loaded
+// Debug
 console.log("✅ Cart routes loaded!");
 
-// 🔧 Helper: Env safe cookie options
+// Cookie options
 const isProd = process.env.NODE_ENV === "production";
 const cookieOpts = {
   httpOnly: true,
   sameSite: isProd ? "None" : "Lax",
   secure: isProd,
-  maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+  maxAge: 1000 * 60 * 60 * 24 * 30,
 };
 
-// 🔧 Helper: Ensure we have an owner (fallback if middleware fails)
+// Ensure Owner (User or Guest)
 function ensureOwner(req, res) {
   if (req.cartOwner && req.cartOwner.id) return req.cartOwner;
 
-  // fallback guest session
   let sid = req.cookies?.guest_session;
   if (!sid) {
-    // simple random guest id
-    sid = "guest_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sid =
+      "guest_" +
+      Math.random().toString(36).slice(2) +
+      Date.now().toString(36);
+
     res.cookie("guest_session", sid, cookieOpts);
   }
+
   const owner = { type: "guest", id: sid };
   req.cartOwner = owner;
   return owner;
 }
 
-/* ================================
-   1) GET CART (User বা Guest)
-================================ */
+/* =======================================
+   1) GET CART — (FIXED FOR VARIANTS)
+======================================= */
 router.get("/", getUserOrGuest, async (req, res) => {
   const owner = ensureOwner(req, res);
 
@@ -49,14 +51,21 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.id,
           c.product_id,
           c.quantity,
+
+          -- 🟣 FINAL VALUES FROM CART
+          c.price AS final_price,
+          c.image_url AS final_image,
+          c.variants AS selected_variants,
+
+          -- Product data (name & discount only)
           p.name,
-          p.price,
-          p.image_url,
           p.discount_percent
+
         FROM carts c
         JOIN products p ON p.id = c.product_id
         WHERE c.user_id = $1
-        ORDER BY c.id DESC`;
+        ORDER BY c.id DESC
+      `;
       params = [owner.id];
     } else {
       query = `
@@ -64,29 +73,47 @@ router.get("/", getUserOrGuest, async (req, res) => {
           c.id,
           c.product_id,
           c.quantity,
+
+          -- 🟣 FINAL VALUES FROM CART
+          c.price AS final_price,
+          c.image_url AS final_image,
+          c.variants AS selected_variants,
+
+          -- Product data (name & discount only)
           p.name,
-          p.price,
-          p.image_url,
           p.discount_percent
+
         FROM carts c
         JOIN products p ON p.id = c.product_id
         WHERE c.session_id = $1
-        ORDER BY c.id DESC`;
+        ORDER BY c.id DESC
+      `;
       params = [owner.id];
     }
 
     const result = await db.query(query, params);
-    res.json({ cart: result.rows });
+
+    // Parse variant JSON
+    const cartItems = result.rows.map((item) => ({
+      ...item,
+      selected_variants: item.selected_variants
+        ? JSON.parse(item.selected_variants)
+        : {},
+    }));
+
+    res.json({ cart: cartItems });
   } catch (err) {
     console.error("❌ GET CART ERROR:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    res.status(500).json({
+      error: "Server error",
+      details: err.message,
+    });
   }
 });
 
-/* ================================
-   2) ADD TO CART
-   - Accepts both {productId} or {product_id}
-================================ */
+/* =======================================
+   2) ADD TO CART — WITH VARIANT SUPPORT
+======================================= */
 router.post("/add", getUserOrGuest, async (req, res) => {
   const owner = ensureOwner(req, res);
 
@@ -95,7 +122,7 @@ router.post("/add", getUserOrGuest, async (req, res) => {
     quantity,
     final_price,
     final_image,
-    selected_variants
+    selected_variants,
   } = req.body;
 
   try {
@@ -105,7 +132,7 @@ router.post("/add", getUserOrGuest, async (req, res) => {
 
     const qty = Math.max(1, Number(quantity || 1));
 
-    // CHECK: product exists?
+    // Check if product exists
     const productExists = await db.query("SELECT id FROM products WHERE id=$1", [
       product_id,
     ]);
@@ -113,7 +140,7 @@ router.post("/add", getUserOrGuest, async (req, res) => {
       return res.status(400).json({ error: "Product not found" });
     }
 
-    // Insert new row ALWAYS — variant based products must be separate
+    // Always insert new row (variant products are unique)
     if (owner.type === "user") {
       await db.query(
         `INSERT INTO carts(user_id, product_id, quantity, price, image_url, variants)
@@ -149,10 +176,9 @@ router.post("/add", getUserOrGuest, async (req, res) => {
   }
 });
 
-
-/* ================================
+/* =======================================
    3) UPDATE QUANTITY
-================================ */
+======================================= */
 router.put("/update/:id", async (req, res) => {
   const { id } = req.params;
   const quantity = Number(req.body.quantity);
@@ -178,21 +204,21 @@ router.put("/update/:id", async (req, res) => {
   }
 });
 
-/* ================================
-   4) REMOVE ITEM (explicit route)
-================================ */
+/* =======================================
+   4) REMOVE ITEM
+======================================= */
 router.delete("/remove/:id", async (req, res) => {
   const { id } = req.params;
-  console.log("🗑 DELETE /remove/:id →", id);
 
   try {
-    const deleted = await db.query("DELETE FROM carts WHERE id=$1 RETURNING *", [id]);
+    const deleted = await db.query("DELETE FROM carts WHERE id=$1 RETURNING *", [
+      id,
+    ]);
 
     if (deleted.rowCount === 0) {
       return res.status(404).json({ error: "Item not found" });
     }
 
-    console.log("✅ Item removed:", id);
     res.json({ success: true, message: "Item removed from cart" });
   } catch (err) {
     console.error("❌ REMOVE CART ITEM ERROR:", err);
@@ -200,20 +226,21 @@ router.delete("/remove/:id", async (req, res) => {
   }
 });
 
-/* ================================
-   5) DELETE CART ITEM (fallback)
-================================ */
+/* =======================================
+   5) DELETE ITEM (Fallback)
+======================================= */
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
-  console.log("🗑 DELETE /:id →", id);
   try {
-    const deleted = await db.query("DELETE FROM carts WHERE id=$1 RETURNING *", [id]);
+    const deleted = await db.query("DELETE FROM carts WHERE id=$1 RETURNING *", [
+      id,
+    ]);
     if (deleted.rowCount === 0) {
       return res.status(404).json({ error: "Item not found" });
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("❌ DELETE /cart/:id ERROR:", err);
+    console.error("❌ DELETE ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
