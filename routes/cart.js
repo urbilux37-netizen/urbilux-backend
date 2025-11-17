@@ -90,60 +90,65 @@ router.get("/", getUserOrGuest, async (req, res) => {
 router.post("/add", getUserOrGuest, async (req, res) => {
   const owner = ensureOwner(req, res);
 
-  // 🔁 accept both styles from frontend
-  const productId = Number(req.body.productId ?? req.body.product_id);
-  const quantity = Math.max(1, Number(req.body.quantity || 1));
+  const {
+    product_id,
+    quantity,
+    final_price,
+    final_image,
+    selected_variants
+  } = req.body;
 
   try {
-    if (!productId || Number.isNaN(productId)) {
-      return res.status(400).json({ error: "Missing or invalid productId" });
+    if (!product_id) {
+      return res.status(400).json({ error: "Missing product_id" });
     }
 
-    // ✅ optional: ensure product exists
-    const p = await db.query("SELECT id FROM products WHERE id=$1", [productId]);
-    if (p.rowCount === 0) {
+    const qty = Math.max(1, Number(quantity || 1));
+
+    // CHECK: product exists?
+    const productExists = await db.query("SELECT id FROM products WHERE id=$1", [
+      product_id,
+    ]);
+    if (productExists.rowCount === 0) {
       return res.status(400).json({ error: "Product not found" });
     }
 
-    // check existing row
-    let existingCart;
+    // Insert new row ALWAYS — variant based products must be separate
     if (owner.type === "user") {
-      existingCart = await db.query(
-        "SELECT id, quantity FROM carts WHERE user_id=$1 AND product_id=$2",
-        [owner.id, productId]
-      );
-    } else {
-      existingCart = await db.query(
-        "SELECT id, quantity FROM carts WHERE session_id=$1 AND product_id=$2",
-        [owner.id, productId]
-      );
-    }
-
-    if (existingCart.rows.length > 0) {
       await db.query(
-        "UPDATE carts SET quantity = quantity + $1, updated_at = now() WHERE id = $2",
-        [quantity, existingCart.rows[0].id]
+        `INSERT INTO carts(user_id, product_id, quantity, price, image_url, variants)
+         VALUES($1,$2,$3,$4,$5,$6)`,
+        [
+          owner.id,
+          product_id,
+          qty,
+          final_price,
+          final_image,
+          JSON.stringify(selected_variants || {}),
+        ]
       );
     } else {
-      if (owner.type === "user") {
-        await db.query(
-          "INSERT INTO carts(user_id, product_id, quantity) VALUES($1,$2,$3)",
-          [owner.id, productId, quantity]
-        );
-      } else {
-        await db.query(
-          "INSERT INTO carts(session_id, product_id, quantity) VALUES($1,$2,$3)",
-          [owner.id, productId, quantity]
-        );
-      }
+      await db.query(
+        `INSERT INTO carts(session_id, product_id, quantity, price, image_url, variants)
+         VALUES($1,$2,$3,$4,$5,$6)`,
+        [
+          owner.id,
+          product_id,
+          qty,
+          final_price,
+          final_image,
+          JSON.stringify(selected_variants || {}),
+        ]
+      );
     }
 
-    res.json({ success: true, message: "Item added to cart" });
+    res.json({ success: true });
   } catch (err) {
-    console.error("❌ ADD TO CART ERROR:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    console.error("❌ CART ADD ERROR:", err);
+    res.status(500).json({ error: "Failed to add to cart" });
   }
 });
+
 
 /* ================================
    3) UPDATE QUANTITY
