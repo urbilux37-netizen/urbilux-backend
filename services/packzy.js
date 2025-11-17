@@ -2,14 +2,13 @@ const axios = require("axios");
 
 async function createPackzyOrder(order) {
   try {
-    // 🟣 Base URL trim + remove trailing slash (fixes invalid URL)
+    // Fix base URL
     const BASE = (process.env.PACKZY_API_BASE || "")
       .trim()
-      .replace(/\/$/, "");
+      .replace(/\/$/, "");  // remove last slash
 
     const url = `${BASE}/create-order`;
 
-    // Debug log
     console.log("PACKZY FINAL URL:", url);
 
     const fullAddress = `
@@ -41,10 +40,10 @@ ${order.customer.district ? ", " + order.customer.district : ""}
     return response.data;
   } catch (error) {
     console.error("Packzy API ERROR:", {
-      message: error.message,
+      msg: error.message,
       response: error.response?.data,
       status: error.response?.status,
-      url: error.config?.url,
+      url: error.config?.url
     });
     throw error;
   }
