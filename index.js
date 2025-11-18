@@ -97,6 +97,8 @@ const orderRoutes = require("./routes/orders");
 const trafficStats = require("./routes/trafficStats");
 
 // ---------------- ROUTES REGISTER ----------------
+app.use("/api/notifications", require("./routes/notifications"));
+
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);

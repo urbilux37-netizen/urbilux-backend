@@ -1,3 +1,5 @@
+const adminSdk = require("../firebase");
+
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
@@ -8,6 +10,30 @@ const { createPackzyOrder } = require("../services/packzy");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const isProd = process.env.NODE_ENV === "production";
+async function notifyAdminsNewOrder(total) {
+  try {
+    const admins = await pool.query(
+      "SELECT fcm_token FROM users WHERE role='admin' AND fcm_token IS NOT NULL"
+    );
+
+    if (admins.rows.length === 0) return;
+
+    const tokens = admins.rows.map(a => a.fcm_token);
+
+    const message = {
+      notification: {
+        title: "New Order Received",
+        body: `Total Amount: ৳${total}`,
+      },
+      tokens,
+    };
+
+    await adminSdk.messaging().sendMulticast(message);
+    console.log("📩 Notification sent to admins:", tokens.length);
+  } catch (err) {
+    console.error("❌ Push Notification Error:", err);
+  }
+}
 
 /* ===========================================================
    ✅ PLACE ORDER (Auto user create if guest + manual payment)
@@ -130,6 +156,8 @@ router.post("/", getUserOrGuest, async (req, res) => {
     }
 
     await client.query("COMMIT");
+    await notifyAdminsNewOrder(total);
+
     console.log("✅ Order placed successfully:", order.rows[0].id);
 
     res.json({ success: true, order: order.rows[0] });
