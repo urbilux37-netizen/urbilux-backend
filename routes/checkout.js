@@ -1,4 +1,4 @@
-const adminSdk = require("../firebase");
+const admin = require("../firebase"); // ⬅ Firebase Admin import
 
 const express = require("express");
 const router = express.Router();
@@ -156,11 +156,51 @@ router.post("/", getUserOrGuest, async (req, res) => {
     }
 
     await client.query("COMMIT");
-    await notifyAdminsNewOrder(total);
+    const savedOrder = order.rows[0];
+    console.log("✅ Order placed successfully:", savedOrder.id);
 
-    console.log("✅ Order placed successfully:", order.rows[0].id);
+    // 🔔 NEW: Send push notification to all admin devices
+    try {
+      // 1) All admin FCM tokens fetch
+      const tokenResult = await client.query(
+        `
+        SELECT nt.fcm_token
+        FROM user_notification_tokens nt
+        JOIN users u ON u.id = nt.user_id
+        WHERE u.role = 'admin'
+        `
+      );
 
-    res.json({ success: true, order: order.rows[0] });
+      const tokens = tokenResult.rows.map((r) => r.fcm_token).filter(Boolean);
+
+      if (tokens.length) {
+        const message = {
+          notification: {
+            title: "New Order Received",
+            body: `Order #${savedOrder.id} • ৳${total}`,
+          },
+          tokens,
+        };
+
+        const fcmResponse = await admin.messaging().sendEachForMulticast(message);
+
+        console.log(
+          "📲 FCM notification sent:",
+          fcmResponse.successCount,
+          "success,",
+          fcmResponse.failureCount,
+          "failed"
+        );
+      } else {
+        console.log("ℹ No admin FCM tokens found. Skipping push notification.");
+      }
+    } catch (notifyErr) {
+      console.error("❌ Error sending FCM notification:", notifyErr);
+    }
+
+    // 🔚 Final response to frontend
+    res.json({ success: true, order: savedOrder });
+
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ Checkout Error:", err);

@@ -73,11 +73,11 @@ const token = jwt.sign(
 );
     res.cookie('token', token, cookieOptions);
 
-  res.json({
-  message: 'Login successful',
-  token, // ⭐ VERY IMPORTANT ⭐
-  user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
-});
+    res.json({
+      message: 'Login successful',
+      user: { id: user.id, email: user.email, phone: user.phone, role: user.role },
+      token, // ⬅ ADD THIS
+    });
 
   } catch (err) {
     console.error("❌ LOGIN ERROR:", err);

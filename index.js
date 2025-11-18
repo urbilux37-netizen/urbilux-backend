@@ -86,6 +86,8 @@ app.use("/uploads", express.static(uploadsDir));
 const authRoutes = require("./routes/auth");
 const cartRoutes = require("./routes/cart");
 const checkoutRoutes = require("./routes/checkout");
+const notificationRoutes = require("./routes/notifications");
+
 const footerRoutes = require("./routes/footer");
 const bannerRoutes = require("./routes/banners");
 const categoryRoutes = require("./routes/categories");
@@ -97,11 +99,13 @@ const orderRoutes = require("./routes/orders");
 const trafficStats = require("./routes/trafficStats");
 
 // ---------------- ROUTES REGISTER ----------------
-app.use("/api/notifications", require("./routes/notifications"));
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);
+app.use("/api/notifications", notificationRoutes);
+
 app.use("/api/footer", footerRoutes);
 app.use("/api/banners", bannerRoutes);
 app.use("/categories", categoryRoutes);
