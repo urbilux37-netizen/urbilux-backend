@@ -1,95 +1,121 @@
+// routes/banners.js
 const express = require("express");
 const router = express.Router();
-const pool = require("../db"); // pg Pool from your db.js
+const path = require("path");
+const fs = require("fs");
+const multer = require("multer");
+const pool = require("../db"); // Neon Postgres Pool (already ache)
 
-// Helper to normalize slot
-function normalizeSlot(slot) {
-  if (!slot) return "main";
-  const s = String(slot).toLowerCase();
-  if (s === "side_top" || s === "side-bottom" || s === "sidebottom") return "side_top";
-  if (s === "side_bottom" || s === "side-bottom2") return "side_bottom";
-  return "main";
+// ========= Multer setup (local /uploads/banners folder) =========
+
+// Make sure folder exists
+const uploadDir = path.join(__dirname, "..", "uploads", "banners");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-/* ============================
-   GET /api/banners
-   All banners (for frontend)
-============================ */
+// save file with timestamp + original name
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/\s+/g, "_");
+    cb(null, `${Date.now()}_${base}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+// helper: build public URL (Render + localhost duijon e kaj korbe)
+function buildImageUrl(req, filename) {
+  const host = req.get("host");
+  const protocol = req.protocol;
+  return `${protocol}://${host}/uploads/banners/${filename}`;
+}
+
+/* =========================================================
+   GET /api/banners  -> all banners (order by created_at desc)
+========================================================= */
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, title, image_url, button_text, button_link, slot, created_at
-       FROM banners
-       ORDER BY 
-         CASE slot
-           WHEN 'main' THEN 1
-           WHEN 'side_top' THEN 2
-           WHEN 'side_bottom' THEN 3
-           ELSE 4
-         END,
-         created_at ASC`
+      "SELECT id, title, image_url, button_text, button_link, slot, created_at FROM banners ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (err) {
     console.error("GET /api/banners error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to fetch banners" });
   }
 });
 
-/* ============================
-   POST /api/banners
-   Body JSON:
-   { title?, image_url, button_text?, button_link?, slot? }
-============================ */
-router.post("/", async (req, res) => {
+/* =========================================================
+   POST /api/banners  (multipart/form-data)
+   fields: image (file), title, button_text, button_link, slot
+========================================================= */
+router.post("/", upload.single("image"), async (req, res) => {
   try {
-    let { title, image_url, button_text, button_link, slot } = req.body;
-
-    if (!image_url) {
-      return res.status(400).json({ error: "image_url is required" });
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: "Image file is required" });
     }
 
-    slot = normalizeSlot(slot);
+    const { title, button_text, button_link, slot } = req.body;
+
+    const imageUrl = buildImageUrl(req, file.filename);
+    const safeSlot =
+      slot === "side_top" || slot === "side_bottom" ? slot : "main";
 
     const result = await pool.query(
       `INSERT INTO banners (title, image_url, button_text, button_link, slot)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, title, image_url, button_text, button_link, slot, created_at`,
-      [title || null, image_url, button_text || null, button_link || null, slot]
+      [
+        title || null,
+        imageUrl,
+        button_text || null,
+        button_link || null,
+        safeSlot,
+      ]
     );
 
     res.json(result.rows[0]);
   } catch (err) {
     console.error("POST /api/banners error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to create banner" });
   }
 });
 
-/* ============================
-   PUT /api/banners/:id
-   Partial update allowed
-============================ */
-router.put("/:id", async (req, res) => {
+/* =========================================================
+   PUT /api/banners/:id  (multipart/form-data)
+   optional: new image file
+========================================================= */
+router.put("/:id", upload.single("image"), async (req, res) => {
+  const { id } = req.params;
+  const { title, button_text, button_link, slot } = req.body;
+  const file = req.file;
+
   try {
-    const { id } = req.params;
-    let { title, image_url, button_text, button_link, slot } = req.body;
-
-    const resultOld = await pool.query("SELECT * FROM banners WHERE id = $1", [
-      id,
-    ]);
-    if (!resultOld.rows.length) {
-      return res.status(404).json({ error: "Not found" });
+    // 1) get existing banner
+    const existing = await pool.query(
+      "SELECT image_url FROM banners WHERE id = $1",
+      [id]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Banner not found" });
     }
-    const old = resultOld.rows[0];
 
-    const newTitle = title !== undefined ? title : old.title;
-    const newImage = image_url !== undefined ? image_url : old.image_url;
-    const newBtnText =
-      button_text !== undefined ? button_text : old.button_text;
-    const newBtnLink =
-      button_link !== undefined ? button_link : old.button_link;
-    const newSlot =
-      slot !== undefined ? normalizeSlot(slot) : old.slot;
+    let imageUrl = existing.rows[0].image_url;
+
+    // 2) if new file uploaded, replace URL
+    if (file) {
+      imageUrl = buildImageUrl(req, file.filename);
+      // old file delete korte chaile ekhane fs.unlinkSync() diye korte paro
+    }
+
+    const safeSlot =
+      slot === "side_top" || slot === "side_bottom" ? slot : "main";
 
     const result = await pool.query(
       `UPDATE banners
@@ -100,27 +126,34 @@ router.put("/:id", async (req, res) => {
            slot = $5
        WHERE id = $6
        RETURNING id, title, image_url, button_text, button_link, slot, created_at`,
-      [newTitle, newImage, newBtnText, newBtnLink, newSlot, id]
+      [
+        title || null,
+        imageUrl,
+        button_text || null,
+        button_link || null,
+        safeSlot,
+        id,
+      ]
     );
 
     res.json(result.rows[0]);
   } catch (err) {
     console.error("PUT /api/banners/:id error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to update banner" });
   }
 });
 
-/* ============================
+/* =========================================================
    DELETE /api/banners/:id
-============================ */
+========================================================= */
 router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
   try {
-    const { id } = req.params;
     await pool.query("DELETE FROM banners WHERE id = $1", [id]);
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/banners/:id error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to delete banner" });
   }
 });
 
