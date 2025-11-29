@@ -1,144 +1,126 @@
 const express = require("express");
 const router = express.Router();
-const pool = require("../db");
-const multer = require("multer");
-const { v2: cloudinary } = require("cloudinary");
-const streamifier = require("streamifier");
+const pool = require("../db"); // pg Pool from your db.js
 
-// -------------------------
-// ☁️ CLOUDINARY CONFIG
-// -------------------------
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Helper to normalize slot
+function normalizeSlot(slot) {
+  if (!slot) return "main";
+  const s = String(slot).toLowerCase();
+  if (s === "side_top" || s === "side-bottom" || s === "sidebottom") return "side_top";
+  if (s === "side_bottom" || s === "side-bottom2") return "side_bottom";
+  return "main";
+}
 
-// -------------------------
-// 📸 MULTER MEMORY STORAGE
-// -------------------------
-const storage = multer.memoryStorage();
-const uploadBanner = multer({ storage });
-
-// -------------------------
-// 🔼 Helper: Upload to Cloudinary
-// -------------------------
-const uploadToCloudinary = (fileBuffer, folder) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder },
-      (error, result) => {
-        if (result) resolve(result.secure_url);
-        else reject(error);
-      }
-    );
-    streamifier.createReadStream(fileBuffer).pipe(stream);
-  });
-};
-
-/* ==========================================================
-   ✅ 1️⃣ Get all banners
-========================================================== */
+/* ============================
+   GET /api/banners
+   All banners (for frontend)
+============================ */
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM banners ORDER BY created_at DESC"
+      `SELECT id, title, image_url, button_text, button_link, slot, created_at
+       FROM banners
+       ORDER BY 
+         CASE slot
+           WHEN 'main' THEN 1
+           WHEN 'side_top' THEN 2
+           WHEN 'side_bottom' THEN 3
+           ELSE 4
+         END,
+         created_at ASC`
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("❌ GET /banners error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("GET /api/banners error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ==========================================================
-   ✅ 2️⃣ Create new banner (image upload + DB insert)
-   body: title, button_text, button_link, slot
-   slot: 'main' | 'side_top' | 'side_bottom'
-========================================================== */
-router.post("/", uploadBanner.single("image"), async (req, res) => {
+/* ============================
+   POST /api/banners
+   Body JSON:
+   { title?, image_url, button_text?, button_link?, slot? }
+============================ */
+router.post("/", async (req, res) => {
   try {
-    const { title, button_text, button_link, slot } = req.body;
-    if (!req.file) return res.status(400).json({ error: "Image required" });
+    let { title, image_url, button_text, button_link, slot } = req.body;
 
-    const bannerSlot =
-      slot === "side_top" || slot === "side_bottom" ? slot : "main";
-
-    // ☁️ Upload to Cloudinary
-    const image_url = await uploadToCloudinary(
-      req.file.buffer,
-      "urbilux/banners"
-    );
-
-    const result = await pool.query(
-      "INSERT INTO banners (title, image_url, button_text, button_link, slot) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-      [title, image_url, button_text, button_link, bannerSlot]
-    );
-
-    res.json({
-      message: "✅ Banner added successfully",
-      banner: result.rows[0],
-    });
-  } catch (err) {
-    console.error("❌ POST /banners error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-/* ==========================================================
-   ✅ 3️⃣ Update banner
-========================================================== */
-router.put("/:id", uploadBanner.single("image"), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, button_text, button_link, slot } = req.body;
-
-    const oldData = await pool.query("SELECT * FROM banners WHERE id=$1", [id]);
-    if (oldData.rows.length === 0)
-      return res.status(404).json({ message: "Banner not found" });
-
-    let image_url = oldData.rows[0].image_url;
-
-    if (req.file) {
-      image_url = await uploadToCloudinary(
-        req.file.buffer,
-        "urbilux/banners"
-      );
+    if (!image_url) {
+      return res.status(400).json({ error: "image_url is required" });
     }
 
-    const bannerSlot =
-      slot === "side_top" || slot === "side_bottom" ? slot : "main";
+    slot = normalizeSlot(slot);
 
-    const updated = await pool.query(
-      "UPDATE banners SET title=$1,image_url=$2,button_text=$3,button_link=$4,slot=$5 WHERE id=$6 RETURNING *",
-      [title, image_url, button_text, button_link, bannerSlot, id]
+    const result = await pool.query(
+      `INSERT INTO banners (title, image_url, button_text, button_link, slot)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, title, image_url, button_text, button_link, slot, created_at`,
+      [title || null, image_url, button_text || null, button_link || null, slot]
     );
 
-    res.json({
-      message: "✅ Banner updated successfully",
-      banner: updated.rows[0],
-    });
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("❌ PUT /banners error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("POST /api/banners error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ==========================================================
-   ✅ 4️⃣ Delete banner
-========================================================== */
+/* ============================
+   PUT /api/banners/:id
+   Partial update allowed
+============================ */
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { title, image_url, button_text, button_link, slot } = req.body;
+
+    const resultOld = await pool.query("SELECT * FROM banners WHERE id = $1", [
+      id,
+    ]);
+    if (!resultOld.rows.length) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const old = resultOld.rows[0];
+
+    const newTitle = title !== undefined ? title : old.title;
+    const newImage = image_url !== undefined ? image_url : old.image_url;
+    const newBtnText =
+      button_text !== undefined ? button_text : old.button_text;
+    const newBtnLink =
+      button_link !== undefined ? button_link : old.button_link;
+    const newSlot =
+      slot !== undefined ? normalizeSlot(slot) : old.slot;
+
+    const result = await pool.query(
+      `UPDATE banners
+       SET title = $1,
+           image_url = $2,
+           button_text = $3,
+           button_link = $4,
+           slot = $5
+       WHERE id = $6
+       RETURNING id, title, image_url, button_text, button_link, slot, created_at`,
+      [newTitle, newImage, newBtnText, newBtnLink, newSlot, id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("PUT /api/banners/:id error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ============================
+   DELETE /api/banners/:id
+============================ */
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const oldData = await pool.query("SELECT * FROM banners WHERE id=$1", [id]);
-    if (oldData.rows.length === 0)
-      return res.status(404).json({ message: "Banner not found" });
-
-    await pool.query("DELETE FROM banners WHERE id=$1", [id]);
-    res.json({ message: "🗑️ Banner deleted successfully" });
+    await pool.query("DELETE FROM banners WHERE id = $1", [id]);
+    res.json({ success: true });
   } catch (err) {
-    console.error("❌ DELETE /banners error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("DELETE /api/banners/:id error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
