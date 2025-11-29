@@ -41,7 +41,9 @@ const uploadToCloudinary = (fileBuffer, folder) => {
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM banners ORDER BY id DESC");
+    const result = await pool.query(
+      "SELECT * FROM banners ORDER BY created_at DESC"
+    );
     res.json(result.rows);
   } catch (err) {
     console.error("❌ GET /banners error:", err);
@@ -51,18 +53,26 @@ router.get("/", async (req, res) => {
 
 /* ==========================================================
    ✅ 2️⃣ Create new banner (image upload + DB insert)
+   body: title, button_text, button_link, slot
+   slot: 'main' | 'side_top' | 'side_bottom'
 ========================================================== */
 router.post("/", uploadBanner.single("image"), async (req, res) => {
   try {
-    const { title, button_text, button_link } = req.body;
+    const { title, button_text, button_link, slot } = req.body;
     if (!req.file) return res.status(400).json({ error: "Image required" });
 
+    const bannerSlot =
+      slot === "side_top" || slot === "side_bottom" ? slot : "main";
+
     // ☁️ Upload to Cloudinary
-    const image_url = await uploadToCloudinary(req.file.buffer, "urbilux/banners");
+    const image_url = await uploadToCloudinary(
+      req.file.buffer,
+      "urbilux/banners"
+    );
 
     const result = await pool.query(
-      "INSERT INTO banners (title, image_url, button_text, button_link) VALUES ($1,$2,$3,$4) RETURNING *",
-      [title, image_url, button_text, button_link]
+      "INSERT INTO banners (title, image_url, button_text, button_link, slot) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [title, image_url, button_text, button_link, bannerSlot]
     );
 
     res.json({
@@ -81,23 +91,27 @@ router.post("/", uploadBanner.single("image"), async (req, res) => {
 router.put("/:id", uploadBanner.single("image"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, button_text, button_link } = req.body;
+    const { title, button_text, button_link, slot } = req.body;
 
-    // Fetch old banner
     const oldData = await pool.query("SELECT * FROM banners WHERE id=$1", [id]);
     if (oldData.rows.length === 0)
       return res.status(404).json({ message: "Banner not found" });
 
     let image_url = oldData.rows[0].image_url;
 
-    // ☁️ If new file uploaded → replace
     if (req.file) {
-      image_url = await uploadToCloudinary(req.file.buffer, "urbilux/banners");
+      image_url = await uploadToCloudinary(
+        req.file.buffer,
+        "urbilux/banners"
+      );
     }
 
+    const bannerSlot =
+      slot === "side_top" || slot === "side_bottom" ? slot : "main";
+
     const updated = await pool.query(
-      "UPDATE banners SET title=$1,image_url=$2,button_text=$3,button_link=$4 WHERE id=$5 RETURNING *",
-      [title, image_url, button_text, button_link, id]
+      "UPDATE banners SET title=$1,image_url=$2,button_text=$3,button_link=$4,slot=$5 WHERE id=$6 RETURNING *",
+      [title, image_url, button_text, button_link, bannerSlot, id]
     );
 
     res.json({
