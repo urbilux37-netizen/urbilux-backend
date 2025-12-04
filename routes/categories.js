@@ -60,7 +60,8 @@ router.post("/", uploadCategory.single("image"), async (req, res) => {
     const { slug, title } = req.body;
 
     if (!slug) return res.status(400).json({ error: "Slug required" });
-    if (!title) return res.status(400).json({ error: "Title required" });
+    // ⚠️ Title optional, na thakle slug diye fill
+    const finalTitle = title && title.trim().length ? title : slug;
 
     // ☁️ Upload image to Cloudinary
     const image_url = await uploadToCloudinary(
@@ -70,7 +71,7 @@ router.post("/", uploadCategory.single("image"), async (req, res) => {
 
     const result = await pool.query(
       "INSERT INTO categories (image_url, slug, title) VALUES ($1, $2, $3) RETURNING *",
-      [image_url, slug, title]
+      [image_url, slug, finalTitle]
     );
 
     res.json({
@@ -110,7 +111,10 @@ router.put("/:id", uploadCategory.single("image"), async (req, res) => {
     }
 
     const newSlug = slug || oldData.rows[0].slug;
-    const newTitle = title || oldData.rows[0].title;
+    const newTitle =
+      (title && title.trim().length ? title : null) ||
+      oldData.rows[0].title ||
+      oldData.rows[0].slug;
 
     const updated = await pool.query(
       "UPDATE categories SET slug=$1, title=$2, image_url=$3 WHERE id=$4 RETURNING *",
