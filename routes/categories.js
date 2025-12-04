@@ -56,15 +56,21 @@ router.get("/", async (req, res) => {
 router.post("/", uploadCategory.single("image"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Image required" });
-    if (!req.body.slug) return res.status(400).json({ error: "Slug required" });
+
+    const { slug, title } = req.body;
+
+    if (!slug) return res.status(400).json({ error: "Slug required" });
+    if (!title) return res.status(400).json({ error: "Title required" });
 
     // ☁️ Upload image to Cloudinary
-    const image_url = await uploadToCloudinary(req.file.buffer, "avado/categories");
-    const { slug } = req.body;
+    const image_url = await uploadToCloudinary(
+      req.file.buffer,
+      "avado/categories"
+    );
 
     const result = await pool.query(
-      "INSERT INTO categories (image_url, slug) VALUES ($1, $2) RETURNING *",
-      [image_url, slug]
+      "INSERT INTO categories (image_url, slug, title) VALUES ($1, $2, $3) RETURNING *",
+      [image_url, slug, title]
     );
 
     res.json({
@@ -83,10 +89,13 @@ router.post("/", uploadCategory.single("image"), async (req, res) => {
 router.put("/:id", uploadCategory.single("image"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { slug } = req.body;
+    const { slug, title } = req.body;
 
     // পুরনো ডাটা বের করা
-    const oldData = await pool.query("SELECT * FROM categories WHERE id=$1", [id]);
+    const oldData = await pool.query(
+      "SELECT * FROM categories WHERE id=$1",
+      [id]
+    );
     if (oldData.rows.length === 0)
       return res.status(404).json({ message: "Category not found" });
 
@@ -94,12 +103,18 @@ router.put("/:id", uploadCategory.single("image"), async (req, res) => {
 
     // ☁️ যদি নতুন ছবি upload করা হয়, Cloudinary তে আপলোড করো
     if (req.file) {
-      image_url = await uploadToCloudinary(req.file.buffer, "avado/categories");
+      image_url = await uploadToCloudinary(
+        req.file.buffer,
+        "avado/categories"
+      );
     }
 
+    const newSlug = slug || oldData.rows[0].slug;
+    const newTitle = title || oldData.rows[0].title;
+
     const updated = await pool.query(
-      "UPDATE categories SET slug=$1, image_url=$2 WHERE id=$3 RETURNING *",
-      [slug || oldData.rows[0].slug, image_url, id]
+      "UPDATE categories SET slug=$1, title=$2, image_url=$3 WHERE id=$4 RETURNING *",
+      [newSlug, newTitle, image_url, id]
     );
 
     res.json({
@@ -120,7 +135,10 @@ router.delete("/:id", async (req, res) => {
     const { id } = req.params;
 
     // পুরনো ডাটা বের করো
-    const oldData = await pool.query("SELECT * FROM categories WHERE id=$1", [id]);
+    const oldData = await pool.query(
+      "SELECT * FROM categories WHERE id=$1",
+      [id]
+    );
     if (oldData.rows.length === 0)
       return res.status(404).json({ message: "Category not found" });
 
