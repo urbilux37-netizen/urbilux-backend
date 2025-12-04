@@ -95,11 +95,13 @@ const productRoutes = require("./routes/products");
 const statsRoutes = require("./routes/stats");
 const orderRoutes = require("./routes/orders");
 
-// 🟣 Traffic Stats Route (ADD THIS)
+// 🟣 Traffic Stats Route (existing)
 const trafficStats = require("./routes/trafficStats");
 
-// ---------------- ROUTES REGISTER ----------------
+// 🟣 NEW: Ticker Routes (HEADER TICKER)
+const tickerRoutes = require("./routes/tickerRoutes");
 
+// ---------------- ROUTES REGISTER ----------------
 
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
@@ -113,8 +115,17 @@ app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/orders", orderRoutes);
 
-// 🟣 Register new Traffic Stats Route (ADD THIS)
+// 🟣 Register new Traffic Stats Route (existing)
 app.use("/api/traffic", trafficStats);
+
+// 🟣 Register new Ticker Routes
+// public:   GET  /api/tickers          (active messages list)
+// admin:    GET  /api/tickers/admin/all
+//           POST /api/tickers/admin
+//           PUT  /api/tickers/admin/:id
+//           DELETE /api/tickers/admin/:id
+//           PATCH  /api/tickers/admin/:id/toggle
+app.use("/api/tickers", tickerRoutes);
 
 // ---------------- ADMIN PROTECTED TEST ROUTE ----------------
 app.get("/api/admin/test", adminOnly, async (req, res) => {
