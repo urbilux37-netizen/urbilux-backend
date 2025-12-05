@@ -99,6 +99,8 @@ const orderRoutes = require("./routes/orders");
 const trafficStats = require("./routes/trafficStats");
 
 // 🟣 NEW: Ticker Routes (HEADER TICKER)
+const secondaryTickerRoutes = require("./routes/secondaryTickerRoutes");
+
 const tickerRoutes = require("./routes/tickerRoutes");
 
 // ---------------- ROUTES REGISTER ----------------
@@ -126,6 +128,7 @@ app.use("/api/traffic", trafficStats);
 //           DELETE /api/tickers/admin/:id
 //           PATCH  /api/tickers/admin/:id/toggle
 app.use("/api/tickers", tickerRoutes);
+app.use("/api/secondary-tickers", secondaryTickerRoutes);
 
 // ---------------- ADMIN PROTECTED TEST ROUTE ----------------
 app.get("/api/admin/test", adminOnly, async (req, res) => {
