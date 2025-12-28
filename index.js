@@ -90,7 +90,7 @@ const notificationRoutes = require("./routes/notifications");
 
 const footerRoutes = require("./routes/footer");
 const bannerRoutes = require("./routes/banners");
-const secondaryBannerRoutes = require("./routes/secondaryBanners");
+const secondaryBannerRoutes = require("./routes/secondaryBannerRoutes");
 
 const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
