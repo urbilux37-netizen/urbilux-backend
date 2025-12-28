@@ -1,72 +1,61 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const multer = require("multer");
-const path = require("path");
 
-/* =============================
-   MULTER CONFIG (same pattern)
-============================= */
-const storage = multer.diskStorage({
-  destination: "uploads/secondary-banners",
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + ext);
-  },
-});
+// Helper
+function mapBanner(row) {
+  return {
+    id: row.id,
+    image_url: row.image_url,
+    created_at: row.created_at,
+  };
+}
 
-const upload = multer({ storage });
-
-/* =============================
-   GET ALL ACTIVE BANNERS
-============================= */
+// GET /api/secondary-banners
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM secondary_banners WHERE is_active=true ORDER BY created_at DESC"
+      "SELECT id, image_url, created_at FROM secondary_banners ORDER BY id DESC"
     );
-    res.json(result.rows);
+    res.json(result.rows.map(mapBanner));
   } catch (err) {
-    console.error("❌ Fetch secondary banners error:", err);
-    res.status(500).json({ error: "Failed to fetch banners" });
+    console.error("GET /api/secondary-banners error:", err);
+    res.status(500).json({ message: "Failed to fetch banners" });
   }
 });
 
-/* =============================
-   ADD NEW BANNER (ADMIN)
-============================= */
-router.post("/", upload.single("image"), async (req, res) => {
+// POST /api/secondary-banners
+router.post("/", async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Image is required" });
-    }
+    const { image_url } = req.body;
 
-    const imageUrl = `/uploads/secondary-banners/${req.file.filename}`;
+    if (!image_url) return res.status(400).json({ message: "image_url required" });
 
     const result = await pool.query(
-      "INSERT INTO secondary_banners (image_url) VALUES ($1) RETURNING *",
-      [imageUrl]
+      "INSERT INTO secondary_banners (image_url) VALUES ($1) RETURNING id, image_url, created_at",
+      [image_url]
     );
 
-    res.json(result.rows[0]);
+    res.status(201).json(mapBanner(result.rows[0]));
   } catch (err) {
-    console.error("❌ Add secondary banner error:", err);
-    res.status(500).json({ error: "Failed to add banner" });
+    console.error("POST /api/secondary-banners error:", err);
+    res.status(500).json({ message: "Failed to add banner" });
   }
 });
 
-/* =============================
-   DELETE BANNER (ADMIN)
-============================= */
+// DELETE /api/secondary-banners/:id
 router.delete("/:id", async (req, res) => {
   try {
-    await pool.query("DELETE FROM secondary_banners WHERE id=$1", [
-      req.params.id,
-    ]);
+    const { id } = req.params;
+    const result = await pool.query("DELETE FROM secondary_banners WHERE id=$1", [id]);
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: "Banner not found" });
+
     res.json({ success: true });
   } catch (err) {
-    console.error("❌ Delete secondary banner error:", err);
-    res.status(500).json({ error: "Failed to delete banner" });
+    console.error("DELETE /api/secondary-banners/:id error:", err);
+    res.status(500).json({ message: "Failed to delete banner" });
   }
 });
 
