@@ -90,6 +90,8 @@ const notificationRoutes = require("./routes/notifications");
 
 const footerRoutes = require("./routes/footer");
 const bannerRoutes = require("./routes/banners");
+const secondaryBannerRoutes = require("./routes/secondaryBanners");
+
 const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
 const statsRoutes = require("./routes/stats");
@@ -112,6 +114,8 @@ app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/footer", footerRoutes);
 app.use("/api/banners", bannerRoutes);
+app.use("/api/secondary-banners", secondaryBannerRoutes);
+
 app.use("/categories", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
