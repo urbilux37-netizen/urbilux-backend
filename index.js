@@ -89,6 +89,8 @@ const checkoutRoutes = require("./routes/checkout");
 const notificationRoutes = require("./routes/notifications");
 
 const footerRoutes = require("./routes/footer");
+const complaintRoutes = require("./routes/complaint");
+
 const bannerRoutes = require("./routes/banners");
 const secondaryBannerRoutes = require("./routes/secondaryBannerRoutes");
 
@@ -113,6 +115,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/complaints", complaintRoutes);
 
 app.use("/api/footer", footerRoutes);
 app.use("/api/banners", bannerRoutes);
