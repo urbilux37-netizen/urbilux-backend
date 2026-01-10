@@ -102,8 +102,10 @@ const trafficStats = require("./routes/trafficStats");
 
 // 🟣 NEW: Ticker Routes (HEADER TICKER)
 const secondaryTickerRoutes = require("./routes/secondaryTickerRoutes");
-
 const tickerRoutes = require("./routes/tickerRoutes");
+
+// 🟢 NEW: BLOG ROUTES
+const blogRoutes = require("./routes/blog");
 
 // ---------------- ROUTES REGISTER ----------------
 
@@ -121,16 +123,16 @@ app.use("/products", productRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/orders", orderRoutes);
 
+// 🟢 Register Blog Routes
+// GET    /api/blogs
+// GET    /api/blogs/:id
+// POST   /api/blogs
+app.use("/api/blogs", blogRoutes);
+
 // 🟣 Register new Traffic Stats Route (existing)
 app.use("/api/traffic", trafficStats);
 
 // 🟣 Register new Ticker Routes
-// public:   GET  /api/tickers          (active messages list)
-// admin:    GET  /api/tickers/admin/all
-//           POST /api/tickers/admin
-//           PUT  /api/tickers/admin/:id
-//           DELETE /api/tickers/admin/:id
-//           PATCH  /api/tickers/admin/:id/toggle
 app.use("/api/tickers", tickerRoutes);
 app.use("/api/secondary-tickers", secondaryTickerRoutes);
 
